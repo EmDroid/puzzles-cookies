@@ -1,0 +1,7 @@
+Debug/
+Release/
+ipch/
+*.sdf
+*.vcxproj.user
+*.suo
+*.opensdf

@@ -44,14 +44,16 @@ double minTime(
 {
     if (start == end)
     {
-        return 0.0;
+        return (cps > 0) ? (total / cps) : 0.0;
     }
-    const double T = total;
     const double G = start->first;
     const double P = start->second;
     const double CPS = (cps > 0) ? cps : G;
-    // compute the minimum off the starting rate (cannot be worse)
-    double timeMin = total / CPS;
+    ValuesT::const_iterator next = start;
+    ++next;
+    // compute the minimum for the current status
+    // (the result must not be worse)
+    double timeMin = minTime(next, end, total, CPS);
     // time to get N factories
     double timeN = 0.0;
     for (unsigned N = 1; /* empty */; ++N)
@@ -60,9 +62,10 @@ double minTime(
         // and that is added to the total time to get N
         timeN += P / ((N - 1) * G + CPS);
         // time to get T with current N factories
-        const double timeTotal = T / (N * G + CPS)
-                                 // and added the time to get the N factories
-                                 + timeN;
+        // (next sources checked recursively)
+        const double timeMinNext = minTime(next, end, total, N * G + CPS);
+        // and add the time to get the N factories
+        const double timeTotal = timeN + timeMinNext;
         if (timeTotal >= timeMin)
         {
             // found the optimum - the time to get T with current N is greater
@@ -76,18 +79,55 @@ double minTime(
 }
 
 
-void test_1()
+void testMinTime(const ValuesT & values, const double total)
+{
+    const double time = minTime(values.begin(), values.end(), total);
+    cout << "Minimum time: " << time << " s" << endl;
+}
+
+
+void test_1source()
 {
     ValuesT values;
     values[1] = 5;
-    const double time = minTime(values.begin(), values.end(), 100);
-    cout << "Minimum time: " << time << " s" << endl;
+    testMinTime(values, 100);
+}
+
+
+void test_2sources()
+{
+    ValuesT values;
+    values[1] = 5;
+    values[4] = 16;
+    testMinTime(values, 100);
+}
+
+
+void test_2sources2ndExpensive()
+{
+    ValuesT values;
+    values[1] = 5;
+    values[4] = 21;
+    testMinTime(values, 100);
+}
+
+
+void test_3sources()
+{
+    ValuesT values;
+    values[1] = 5;
+    values[4] = 16;
+    values[8] = 25;
+    testMinTime(values, 1000);
 }
 
 
 int main()
 {
-    test_1();
+    test_1source();
+    test_2sources();
+    test_2sources2ndExpensive();
+    test_3sources();
     return EXIT_SUCCESS;
 }
 

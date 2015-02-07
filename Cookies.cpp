@@ -41,7 +41,7 @@ typedef map< double, double > ValuesT;
 typedef vector< unsigned > CountsT;
 
 
-double minTime(
+double minTimeOptimized(
     const ValuesT::const_iterator & start,
     const ValuesT::const_iterator & end,
     const CountsT::iterator & counts,
@@ -61,17 +61,115 @@ double minTime(
     ++countsNext;
     // compute the minimum for the current status
     // (the result must not be worse)
-    double timeMin = minTime(valuesNext, end, countsNext, total, CPS);
+    double timeMin = minTimeOptimized(
+        valuesNext,
+        end,
+        countsNext,
+        total,
+        CPS);
+    // time to get N factories
+    double timeN = 0.0;
+    // if we are at the last cookie, we can estimate the N
+    if (valuesNext == end)
+    {
+        const double tmpN = total / P - CPS / G;
+        static const unsigned MAX_INTEGER_VALUE = 0u - 1u;
+        if (tmpN > MAX_INTEGER_VALUE)
+        {
+            cerr << "ERROR: Loop variable overflow!" << endl;
+        }
+        const unsigned finalN = (tmpN < 0)
+                                ? 0
+                                : static_cast< unsigned >(tmpN);
+        // go the opposite side from lower numbers to bigger
+        // (to mitigate the floating point imprecision)
+        for (unsigned N = finalN; N > 0; --N)
+        {
+            // time to get the N-th factory from (N-1)-th
+            // is added to the total time to get N
+            timeN += P / ((N - 1) * G + CPS);
+        }
+        // time to get T with current N factories
+        // (next sources checked recursively)
+        const double timeMinNext = minTimeOptimized(
+            valuesNext,
+            end,
+            countsNext,
+            total,
+            finalN * G + CPS);
+        // and add the time to get the N factories
+        *counts = finalN;
+        timeMin = timeN + timeMinNext;
+    }
+    else
+    {
+        for (unsigned N = 1; /* empty */; ++N)
+        {
+            // time to get the N-th factory from (N-1)-th
+            // is added to the total time to get N
+            timeN += P / ((N - 1) * G + CPS);
+            // time to get T with current N factories
+            // (next sources checked recursively)
+            const double timeMinNext = minTimeOptimized(
+                valuesNext,
+                end,
+                countsNext,
+                total,
+                N * G + CPS);
+            // and add the time to get the N factories
+            const double timeTotal = timeN + timeMinNext;
+            if (timeTotal >= timeMin)
+            {
+                // found the optimum - the time to get T with current N is
+                // greater
+                // than or equat to the previous minimum
+                *counts = N - 1;
+                break;
+            }
+            // found a new minimum
+            timeMin = timeTotal;
+        }
+    }
+    return timeMin;
+}
+
+
+double minTimeBruteForce(
+    const ValuesT::const_iterator & start,
+    const ValuesT::const_iterator & end,
+    const CountsT::iterator & counts,
+    const double total,
+    const double cps = 0)
+{
+    if (start == end)
+    {
+        return (cps > 0) ? (total / cps) : 0.0;
+    }
+    const double G = start->first;
+    const double P = start->second;
+    const double CPS = (cps > 0) ? cps : G;
+    ValuesT::const_iterator valuesNext = start;
+    ++valuesNext;
+    CountsT::iterator countsNext = counts;
+    ++countsNext;
+    // compute the minimum for the current status
+    // (the result must not be worse)
+    double timeMin = minTimeBruteForce(
+        valuesNext,
+        end,
+        countsNext,
+        total,
+        CPS);
     // time to get N factories
     double timeN = 0.0;
     for (unsigned N = 1; /* empty */; ++N)
     {
-        // time to get the N-th factory from (N-1)-th is P/((N -1) * G + CPS)
-        // and that is added to the total time to get N
+        // time to get the N-th factory from (N-1)-th
+        // is added to the total time to get N
         timeN += P / ((N - 1) * G + CPS);
         // time to get T with current N factories
         // (next sources checked recursively)
-        const double timeMinNext = minTime(
+        const double timeMinNext = minTimeBruteForce(
             valuesNext,
             end,
             countsNext,
@@ -93,52 +191,110 @@ double minTime(
 }
 
 
-void testMinTime(const ValuesT & values, const double total)
+void reportCounts(const ValuesT & values, const CountsT & counts)
 {
-    CountsT counts(values.size(), 0);
-
-    clock_t start;
-    const clock_t tmp = clock();
-    do
-    {
-        start = clock();
-    }
-    while (tmp == start);
-
-    const double time = minTime(
-        values.begin(),
-        values.end(),
-        counts.begin(),
-        total);
-
-    const clock_t end = clock();
-    const double elapsed = static_cast< double >(end - start)
-                           / CLOCKS_PER_SEC;
-
-    // there is one cookie #1 already available at the beginning
-    if (counts.size() > 0)
-    {
-        ++counts[0];
-    }
-
-    cout << "========================================" << endl;
-    cout << "Calculation for cookies list:" << endl;
-    cout << "========================================" << endl;
     size_t i = 0;
     ValuesT::const_iterator itV = values.begin();
     CountsT::const_iterator itC = counts.begin();
     while (itV != values.end())
     {
-        cout << "\t#" << ++i
-             << ": gen = " << itV->first
-             << " c/s, price = " << itV->second
-             << " c\t... " << *itC << endl;
+        cout << "\t#" << ++i << ":"
+             << " gen = " << itV->first << " c/s,"
+             << " price = " << itV->second << " c"
+             << "\t... " << *itC << endl;
         ++itV, ++itC;
     }
+}
+
+
+void testMinTime(
+    const ValuesT & values,
+    const double total,
+    const bool checkBf = true)
+{
+    CountsT counts(values.size(), 0);
+    CountsT countsReference(values.size(), 0);
+
+    double timeReference = 0.0;
+    double elapsedBf = 0.0;
+    if (checkBf)
+    {
+        clock_t startBf;
+        const clock_t tmpBf = clock();
+        do
+        {
+            startBf = clock();
+        }
+        while (tmpBf == startBf);
+
+        timeReference = minTimeBruteForce(
+            values.begin(),
+            values.end(),
+            countsReference.begin(),
+            total);
+
+        const clock_t endBf = clock();
+        elapsedBf = static_cast< double >(endBf - startBf)
+                    / CLOCKS_PER_SEC;
+    }
+
+    clock_t startOpt;
+    const clock_t tmpOpt = clock();
+    do
+    {
+        startOpt = clock();
+    }
+    while (tmpOpt == startOpt);
+
+    const double time = minTimeOptimized(
+        values.begin(),
+        values.end(),
+        counts.begin(),
+        total);
+
+    const clock_t endOpt = clock();
+    const double elapsedOpt = static_cast< double >(endOpt - startOpt)
+                              / CLOCKS_PER_SEC;
+
+    // there is one cookie #1 already available at the beginning
+    if (values.empty())
+    {
+        ++counts[0];
+        ++countsReference[0];
+    }
+
+    cout << endl;
+    cout << "========================================" << endl;
+    cout << "Calculation for cookies list:" << endl;
+    cout << "========================================" << endl;
+    reportCounts(values, counts);
     cout << "----------------------------------------" << endl;
-    cout << "Result minimal time: " << time << " s" << endl;
+    cout << "Reached " << total << " credits in: " << time << " s" << endl;
     cout << "----------------------------------------" << endl;
-    cout << "Calculation time: " << elapsed << " s" << endl << endl;
+    cout << "Calculated in: " << elapsedOpt << " s";
+    if (checkBf)
+    {
+        cout << " (brute force: " << elapsedBf << " s)";
+    }
+    cout << endl;
+
+    if (checkBf && (fabs(timeReference - time) > 0.1))
+    {
+        cout << endl;
+        cout << "WARNING:"
+             << " Reference minimal time differs from the current result!"
+             << endl;
+        cout << "\tReference minimal time: " << timeReference << " s" << endl;
+    }
+    if (checkBf && (counts != countsReference))
+    {
+        cout << endl;
+        cout << "WARNING:"
+             << " Reference counts differ from the current result!"
+             << endl;
+        reportCounts(values, countsReference);
+    }
+    cout << endl;
 }
 
 

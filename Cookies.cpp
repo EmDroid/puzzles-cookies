@@ -28,17 +28,23 @@
 */
 
 
+#include <ctime>
+
 #include <map>
+#include <vector>
 
 #include <iostream>
 using namespace std;
 
 
 typedef map< double, double > ValuesT;
+typedef vector< unsigned > CountsT;
+
 
 double minTime(
     const ValuesT::const_iterator & start,
     const ValuesT::const_iterator & end,
+    const CountsT::iterator & counts,
     const double total,
     const double cps = 0)
 {
@@ -49,11 +55,13 @@ double minTime(
     const double G = start->first;
     const double P = start->second;
     const double CPS = (cps > 0) ? cps : G;
-    ValuesT::const_iterator next = start;
-    ++next;
+    ValuesT::const_iterator valuesNext = start;
+    ++valuesNext;
+    CountsT::iterator countsNext = counts;
+    ++countsNext;
     // compute the minimum for the current status
     // (the result must not be worse)
-    double timeMin = minTime(next, end, total, CPS);
+    double timeMin = minTime(valuesNext, end, countsNext, total, CPS);
     // time to get N factories
     double timeN = 0.0;
     for (unsigned N = 1; /* empty */; ++N)
@@ -63,13 +71,19 @@ double minTime(
         timeN += P / ((N - 1) * G + CPS);
         // time to get T with current N factories
         // (next sources checked recursively)
-        const double timeMinNext = minTime(next, end, total, N * G + CPS);
+        const double timeMinNext = minTime(
+            valuesNext,
+            end,
+            countsNext,
+            total,
+            N * G + CPS);
         // and add the time to get the N factories
         const double timeTotal = timeN + timeMinNext;
         if (timeTotal >= timeMin)
         {
             // found the optimum - the time to get T with current N is greater
             // than or equat to the previous minimum
+            *counts = N - 1;
             break;
         }
         // found a new minimum
@@ -81,8 +95,50 @@ double minTime(
 
 void testMinTime(const ValuesT & values, const double total)
 {
-    const double time = minTime(values.begin(), values.end(), total);
-    cout << "Minimum time: " << time << " s" << endl;
+    CountsT counts(values.size(), 0);
+
+    clock_t start;
+    const clock_t tmp = clock();
+    do
+    {
+        start = clock();
+    }
+    while (tmp == start);
+
+    const double time = minTime(
+        values.begin(),
+        values.end(),
+        counts.begin(),
+        total);
+
+    const clock_t end = clock();
+    const double elapsed = static_cast< double >(end - start)
+                           / CLOCKS_PER_SEC;
+
+    // there is one cookie #1 already available at the beginning
+    if (counts.size() > 0)
+    {
+        ++counts[0];
+    }
+
+    cout << "========================================" << endl;
+    cout << "Calculation for cookies list:" << endl;
+    cout << "========================================" << endl;
+    size_t i = 0;
+    ValuesT::const_iterator itV = values.begin();
+    CountsT::const_iterator itC = counts.begin();
+    while (itV != values.end())
+    {
+        cout << "\t#" << ++i
+             << ": gen = " << itV->first
+             << " c/s, price = " << itV->second
+             << " c\t... " << *itC << endl;
+        ++itV, ++itC;
+    }
+    cout << "----------------------------------------" << endl;
+    cout << "Result minimal time: " << time << " s" << endl;
+    cout << "----------------------------------------" << endl;
+    cout << "Calculation time: " << elapsed << " s" << endl << endl;
 }
 
 
@@ -117,7 +173,7 @@ void test_3sources()
     ValuesT values;
     values[1] = 5;
     values[4] = 16;
-    values[8] = 25;
+    values[20] = 75;
     testMinTime(values, 1000);
 }
 

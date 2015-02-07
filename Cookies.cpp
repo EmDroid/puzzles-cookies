@@ -122,12 +122,23 @@ void test_3sources()
 }
 
 
+void test_3sourcesBigNumbers()
+{
+    ValuesT values;
+    values[0.1] = 15;
+    values[0.5] = 100;
+    values[4.0] = 500;
+    testMinTime(values, 1e6);
+}
+
+
 int main()
 {
     test_1source();
     test_2sources();
     test_2sources2ndExpensive();
     test_3sources();
+    test_3sourcesBigNumbers();
     return EXIT_SUCCESS;
 }
 

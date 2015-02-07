@@ -344,6 +344,24 @@ void test_3sourcesBigNumbers()
 }
 
 
+void test_MultiSources(
+    const unsigned n,
+    const double total,
+    const bool checkBf = true)
+{
+    ValuesT values;
+    double gen = 0.2;
+    double price = 3;
+    for (unsigned i = 0; i < n; ++i)
+    {
+        values[gen] = price;
+        gen *= 4;
+        price *= 3;
+    }
+    testMinTime(values, total, checkBf);
+}
+
+
 int main()
 {
     test_1source();
@@ -351,6 +369,9 @@ int main()
     test_2sources2ndExpensive();
     test_3sources();
     test_3sourcesBigNumbers();
+    test_MultiSources(5, 1e6);
+    test_MultiSources(10, 1e6, false);
+    test_MultiSources(20, 1e9, false);
     return EXIT_SUCCESS;
 }
 

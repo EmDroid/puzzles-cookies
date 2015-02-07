@@ -5,3 +5,4 @@ ipch/
 *.vcxproj.user
 *.suo
 *.opensdf
+*.ods#

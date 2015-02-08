@@ -28,6 +28,8 @@
 */
 
 
+#include <cstdlib>
+#include <cmath>
 #include <ctime>
 
 #include <map>
